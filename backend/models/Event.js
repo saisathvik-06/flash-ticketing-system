@@ -36,7 +36,7 @@ const eventSchema = new mongoose.Schema(
     },
     theme: {
       type: String,
-      enum: ['violet', 'emerald', 'amber', 'rose'],
+      enum: ['violet', 'emerald', 'amber', 'rose', 'cyan'],
       default: 'violet',
     },
     rows: {

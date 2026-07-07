@@ -5,13 +5,6 @@
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 }
 
-/* ── Reset ── */
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
 body {
   background-color: #080a12;
   color: #e2e8f0;

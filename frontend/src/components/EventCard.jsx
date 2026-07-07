@@ -1,11 +1,13 @@
 import { useNavigate } from 'react-router-dom';
 import { CalendarDays, MapPin, ArrowRight } from 'lucide-react';
 import { themeFor } from '../lib/theme';
+import { CATEGORY_ICONS } from '../lib/categories';
 import { formatEventDateShort, isPastEvent } from '../lib/dates';
 
 export default function EventCard({ event }) {
   const navigate = useNavigate();
   const theme = themeFor(event.theme);
+  const Icon = CATEGORY_ICONS[event.category] || CATEGORY_ICONS.Other;
   const isPast = isPastEvent(event.dateTime);
 
   return (
@@ -13,10 +15,16 @@ export default function EventCard({ event }) {
       onClick={() => navigate(`/events/${event._id}`)}
       className={`group relative w-full text-left rounded-2xl border border-white/[0.06] bg-white/[0.02] overflow-hidden transition-all duration-300 hover:border-white/[0.12] hover:-translate-y-0.5 cursor-pointer ${theme.glow}`}
     >
-      <div className={`h-24 bg-gradient-to-br ${theme.banner} relative`}>
+      {/* Poster-style banner — a large watermark icon standing in for cover art */}
+      <div className={`h-32 bg-gradient-to-br ${theme.banner} relative overflow-hidden`}>
+        <Icon
+          className="absolute -right-3 -bottom-5 w-28 h-28 text-white/[0.07] group-hover:text-white/[0.1] group-hover:scale-105 transition-all duration-500"
+          strokeWidth={1.25}
+        />
         <span
-          className={`absolute top-3 left-3 px-2.5 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wider border ${theme.badge}`}
+          className={`absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wider border ${theme.badge}`}
         >
+          <Icon className="w-3 h-3" />
           {event.category}
         </span>
         {isPast && (

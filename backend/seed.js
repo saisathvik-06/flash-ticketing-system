@@ -31,12 +31,38 @@ const EVENTS = [
     ],
   },
   {
+    name: 'Edge of Tomorrow: Reloaded',
+    category: 'Movie',
+    venue: 'Cineplex Grand',
+    description: 'A time-bending sci-fi action sequel, first-week exclusive.',
+    dateTime: daysFromNow(5),
+    theme: 'cyan',
+    tiers: [
+      { name: 'VIP', rows: ['A', 'B', 'C'], price: 899 },
+      { name: 'Premium', rows: ['D', 'E', 'F', 'G'], price: 549 },
+      { name: 'Standard', rows: ['H', 'I', 'J'], price: 299 },
+    ],
+  },
+  {
+    name: 'Midnight in Neo Tokyo',
+    category: 'Movie',
+    venue: 'The Art House Cinema',
+    description: 'A neon-drenched animated thriller, midnight screening only.',
+    dateTime: daysFromNow(12),
+    theme: 'rose',
+    tiers: [
+      { name: 'VIP', rows: ['A', 'B', 'C'], price: 799 },
+      { name: 'Premium', rows: ['D', 'E', 'F', 'G'], price: 499 },
+      { name: 'Standard', rows: ['H', 'I', 'J'], price: 249 },
+    ],
+  },
+  {
     name: 'Neon Nights Live',
     category: 'Concert',
     venue: 'Arena 21',
     description: 'An electrifying night of music under the neon lights.',
     dateTime: daysFromNow(14),
-    theme: 'rose',
+    theme: 'amber',
     tiers: [
       { name: 'VIP', rows: ['A', 'B', 'C'], price: 1499 },
       { name: 'Premium', rows: ['D', 'E', 'F', 'G'], price: 899 },
@@ -49,7 +75,7 @@ const EVENTS = [
     venue: 'The Laugh Factory',
     description: 'An hour of unfiltered comedy from the circuit’s sharpest voice.',
     dateTime: daysFromNow(3),
-    theme: 'amber',
+    theme: 'emerald',
     tiers: [
       { name: 'VIP', rows: ['A', 'B', 'C'], price: 799 },
       { name: 'Premium', rows: ['D', 'E', 'F', 'G'], price: 499 },
@@ -62,7 +88,7 @@ const EVENTS = [
     venue: 'City Sports Complex',
     description: 'The season comes down to this: winner takes the trophy.',
     dateTime: daysFromNow(10),
-    theme: 'emerald',
+    theme: 'violet',
     tiers: [
       { name: 'VIP', rows: ['A', 'B', 'C'], price: 1999 },
       { name: 'Premium', rows: ['D', 'E', 'F', 'G'], price: 1199 },

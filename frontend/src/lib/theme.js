@@ -33,6 +33,14 @@ export const THEMES = {
     ring: 'ring-emerald-500/40',
     dot: 'bg-emerald-500',
   },
+  cyan: {
+    gradient: 'from-cyan-400 to-blue-400',
+    banner: 'from-cyan-600/30 via-blue-600/10 to-transparent',
+    badge: 'bg-cyan-500/15 border-cyan-500/30 text-cyan-300',
+    glow: 'group-hover:shadow-[0_0_28px_rgba(34,211,238,0.25)]',
+    ring: 'ring-cyan-500/40',
+    dot: 'bg-cyan-500',
+  },
 };
 
 export function themeFor(theme) {
