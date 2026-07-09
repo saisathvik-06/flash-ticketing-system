@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import { fetchEvents } from '../lib/api';
 import { isPastEvent } from '../lib/dates';
 import { CATEGORIES, CATEGORY_ICONS } from '../lib/categories';
 import EventCard from '../components/EventCard';
+import socket from '../lib/socket';
 
 function HeroStat({ value, label }) {
   return (
@@ -22,7 +23,7 @@ export default function EventsPage() {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('All');
 
-  useEffect(() => {
+  const load = useCallback(() => {
     fetchEvents()
       .then(setEvents)
       .catch((err) => {
@@ -31,6 +32,13 @@ export default function EventsPage() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    load();
+    // An admin created/edited/deleted an event elsewhere — refresh the catalog.
+    socket.on('events:changed', load);
+    return () => socket.off('events:changed', load);
+  }, [load]);
 
   const categoriesInUse = useMemo(() => {
     const present = new Set(events.map((e) => e.category));

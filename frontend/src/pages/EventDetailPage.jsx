@@ -46,6 +46,28 @@ export default function EventDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
 
+  // ── Live event edits from the admin dashboard ──
+  useEffect(() => {
+    const handler = ({ eventId: changedId }) => {
+      if (changedId && changedId !== eventId) return;
+
+      Promise.all([fetchEvent(eventId), fetchSeats(eventId)])
+        .then(([eventData, seatData]) => {
+          setEvent(eventData);
+          setSeats(seatData);
+          notify('info', 'This event was just updated by an admin.');
+        })
+        .catch(() => {
+          notify('warning', 'This event is no longer available.');
+          navigate('/');
+        });
+    };
+
+    socket.on('events:changed', handler);
+    return () => socket.off('events:changed', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId]);
+
   // ── Real-time seat updates ──
   useEffect(() => {
     const handler = ({ seatNumber, status }) => {

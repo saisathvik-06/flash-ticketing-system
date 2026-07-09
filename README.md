@@ -79,7 +79,16 @@ npm run dev
 
 To see the admin dashboard, put your Clerk account's email in **both**
 `backend/.env`'s `ADMIN_EMAILS` (enforced) and `frontend/.env`'s
-`VITE_ADMIN_EMAILS` (just shows the nav link).
+`VITE_ADMIN_EMAILS` (just shows the nav link). From there, **Admin → Manage
+Events** lets you create/edit/delete events — title, category, venue,
+description, date, theme, and the full seat grid (rows, seats per row, and
+per-row pricing tiers).
+
+## Deploying live
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for a step-by-step guide to putting this
+on the internet (MongoDB Atlas, Upstash Redis, Clerk, Render, Vercel) so it's
+reachable from any device via a real URL, not just `localhost`.
 
 ## Concurrency test
 

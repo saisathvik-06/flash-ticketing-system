@@ -4,6 +4,8 @@ import { IndianRupee, Ticket, Armchair, CalendarRange, ShieldAlert } from 'lucid
 import { fetchAdminStats, fetchAdminBookings } from '../lib/api';
 import socket, { joinAdminRoom } from '../lib/socket';
 import StatCard from '../components/StatCard';
+import EventManager from '../components/EventManager';
+import { useNotify } from '../context/notification-store';
 import { formatDateOnly } from '../lib/dates';
 
 function OccupancyBar({ seats }) {
@@ -20,11 +22,13 @@ function OccupancyBar({ seats }) {
 export default function AdminPage() {
   const { getToken } = useAuth();
   const { isLoaded, isSignedIn } = useUser();
+  const notify = useNotify();
 
   const [stats, setStats] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
+  const [tab, setTab] = useState('overview');
 
   const load = useCallback(async () => {
     try {
@@ -103,6 +107,31 @@ export default function AdminPage() {
         <p className="text-sm text-gray-500">Live revenue, occupancy, and booking activity.</p>
       </div>
 
+      <div className="flex items-center gap-1 mb-8 border-b border-white/[0.06]">
+        {[
+          { key: 'overview', label: 'Overview' },
+          { key: 'events', label: 'Manage Events' },
+        ].map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors cursor-pointer ${
+              tab === t.key
+                ? 'border-violet-500 text-white'
+                : 'border-transparent text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'events' && (
+        <EventManager eventOccupancy={stats.eventOccupancy} notify={notify} onChanged={load} />
+      )}
+
+      {tab === 'overview' && (
+      <>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
         <StatCard
           icon={IndianRupee}
@@ -200,6 +229,8 @@ export default function AdminPage() {
           </table>
         </div>
       </section>
+      </>
+      )}
     </main>
   );
 }

@@ -17,6 +17,7 @@ const {
 } = require('./utils/redisKeys');
 const {
   broadcastAdminUpdate,
+  broadcastCatalogChanged,
   broadcastSeatUpdate,
   eventRoom,
   setSocketServer,
@@ -96,6 +97,150 @@ function normalizeSeatNumber(seatNumber) {
 function computePriceRange(tiers) {
   const prices = tiers.map((tier) => tier.price);
   return { min: Math.min(...prices), max: Math.max(...prices) };
+}
+
+// ─────────────────────────── Admin event editing ───────────────────────────
+
+const THEME_OPTIONS = ['violet', 'emerald', 'amber', 'rose', 'cyan'];
+const ROW_LETTER_REGEX = /^[A-Z]$/;
+const MAX_ROWS = 26;
+const MAX_COLS = 40;
+
+function badRequest(message) {
+  const err = new Error(message);
+  err.status = 400;
+  return err;
+}
+
+// Validates and normalizes the admin-supplied event shape (title, theme, venue,
+// seat grid, tiers). Rows are restricted to single uppercase letters so seat
+// numbers ("A1") can be unambiguously split back into row + column elsewhere.
+function parseEventInput(body) {
+  const errors = [];
+
+  const name = String(body.name || '').trim();
+  if (!name) errors.push('Name is required.');
+
+  const venue = String(body.venue || '').trim();
+  if (!venue) errors.push('Venue is required.');
+
+  const category = String(body.category || 'General').trim() || 'General';
+  const description = String(body.description || '');
+
+  const dateTime = new Date(body.dateTime);
+  if (Number.isNaN(dateTime.getTime())) errors.push('A valid date/time is required.');
+
+  const theme = THEME_OPTIONS.includes(body.theme) ? body.theme : null;
+  if (!theme) errors.push(`Theme must be one of: ${THEME_OPTIONS.join(', ')}.`);
+
+  const rows = Array.isArray(body.rows)
+    ? body.rows.map((r) => String(r).trim().toUpperCase())
+    : [];
+  const uniqueRows = new Set(rows);
+
+  if (rows.length === 0 || rows.length > MAX_ROWS) {
+    errors.push(`Rows must contain between 1 and ${MAX_ROWS} entries.`);
+  } else if (uniqueRows.size !== rows.length || rows.some((r) => !ROW_LETTER_REGEX.test(r))) {
+    errors.push('Each row must be a unique single uppercase letter (A-Z).');
+  }
+
+  const cols = Number(body.cols);
+  if (!Number.isInteger(cols) || cols < 1 || cols > MAX_COLS) {
+    errors.push(`Columns must be an integer between 1 and ${MAX_COLS}.`);
+  }
+
+  const tiers = Array.isArray(body.tiers)
+    ? body.tiers.map((t) => ({
+        name: String(t.name || '').trim(),
+        price: Number(t.price),
+        rows: Array.isArray(t.rows)
+          ? [...new Set(t.rows.map((r) => String(r).trim().toUpperCase()))]
+          : [],
+      }))
+    : [];
+
+  if (tiers.length === 0) {
+    errors.push('At least one pricing tier is required.');
+  } else {
+    const tierNames = new Set();
+    const coveredRows = new Set();
+
+    for (const tier of tiers) {
+      if (!tier.name) {
+        errors.push('Every tier needs a name.');
+      } else if (tierNames.has(tier.name.toLowerCase())) {
+        errors.push(`Tier name "${tier.name}" is used more than once.`);
+      }
+      tierNames.add(tier.name.toLowerCase());
+
+      if (!Number.isFinite(tier.price) || tier.price < 0) {
+        errors.push(`Tier "${tier.name || '?'}" needs a valid non-negative price.`);
+      }
+      if (tier.rows.length === 0) {
+        errors.push(`Tier "${tier.name || '?'}" must cover at least one row.`);
+      }
+
+      for (const r of tier.rows) {
+        if (!uniqueRows.has(r)) {
+          errors.push(`Tier "${tier.name || '?'}" references row "${r}" which isn't in this event's row list.`);
+        } else if (coveredRows.has(r)) {
+          errors.push(`Row "${r}" is assigned to more than one tier.`);
+        }
+        coveredRows.add(r);
+      }
+    }
+
+    for (const r of rows) {
+      if (!coveredRows.has(r)) errors.push(`Row "${r}" isn't covered by any tier.`);
+    }
+  }
+
+  if (errors.length > 0) {
+    throw badRequest(errors.join(' '));
+  }
+
+  return { name, category, venue, description, dateTime, theme, rows, cols, tiers };
+}
+
+function tierForRow(tiers, row) {
+  return tiers.find((tier) => tier.rows.includes(row));
+}
+
+function buildSeatDocs(event) {
+  const seats = [];
+  for (const row of event.rows) {
+    const tier = tierForRow(event.tiers, row);
+    for (let col = 1; col <= event.cols; col += 1) {
+      seats.push({
+        eventId: event._id,
+        seatNumber: `${row}${col}`,
+        tier: tier.name,
+        price: tier.price,
+        status: 'available',
+        lockedBy: null,
+        bookedBy: null,
+      });
+    }
+  }
+  return seats;
+}
+
+// A tier's "shape" (which rows it covers) ignores its name/price so a pure
+// relabel/repricing doesn't require destroying and recreating every seat.
+function tiersStructureKey(tiers) {
+  return tiers
+    .map((t) => [...t.rows].sort().join(','))
+    .sort()
+    .join('|');
+}
+
+function isStructuralChange(existingEvent, input) {
+  const oldRows = [...existingEvent.rows].sort().join(',');
+  const newRows = [...input.rows].sort().join(',');
+  if (oldRows !== newRows) return true;
+  if (existingEvent.cols !== input.cols) return true;
+  if (tiersStructureKey(existingEvent.tiers) !== tiersStructureKey(input.tiers)) return true;
+  return false;
 }
 
 function startExpirationWorker() {
@@ -497,6 +642,128 @@ app.get('/api/admin/bookings', requireAuth, requireAdmin, async (req, res) => {
   } catch (err) {
     console.error('Failed to fetch admin bookings:', err.message);
     return res.status(500).json({ message: 'Unable to fetch bookings.' });
+  }
+});
+
+app.post('/api/admin/events', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const input = parseEventInput(req.body);
+    const event = await Event.create(input);
+    await Seat.insertMany(buildSeatDocs(event));
+
+    broadcastCatalogChanged(event._id);
+    broadcastAdminUpdate();
+
+    return res.status(201).json({
+      ...event.toObject(),
+      priceRange: computePriceRange(event.tiers),
+    });
+  } catch (err) {
+    const status = err.status || 500;
+    if (status === 500) console.error('Failed to create event:', err.message);
+    return res.status(status).json({ message: err.message || 'Unable to create event.' });
+  }
+});
+
+app.put('/api/admin/events/:eventId', requireAuth, requireAdmin, async (req, res) => {
+  const { eventId } = req.params;
+
+  if (!mongoose.isValidObjectId(eventId)) {
+    return res.status(400).json({ message: 'Invalid event id.' });
+  }
+
+  try {
+    const existing = await Event.findById(eventId);
+    if (!existing) {
+      return res.status(404).json({ message: 'Event not found.' });
+    }
+
+    const input = parseEventInput({
+      name: req.body.name ?? existing.name,
+      category: req.body.category ?? existing.category,
+      venue: req.body.venue ?? existing.venue,
+      description: req.body.description ?? existing.description,
+      dateTime: req.body.dateTime ?? existing.dateTime,
+      theme: req.body.theme ?? existing.theme,
+      rows: req.body.rows ?? existing.rows,
+      cols: req.body.cols ?? existing.cols,
+      tiers: req.body.tiers ?? existing.tiers,
+    });
+
+    const structural = isStructuralChange(existing, input);
+
+    if (structural) {
+      const bookedCount = await Seat.countDocuments({ eventId, status: 'booked' });
+      if (bookedCount > 0) {
+        return res.status(409).json({
+          message: `Can't change the seat layout — ${bookedCount} seat(s) are already booked for this event. Cancel those bookings first, or leave rows/columns/tier row assignments unchanged.`,
+        });
+      }
+    }
+
+    existing.set(input);
+    await existing.save();
+
+    if (structural) {
+      await Seat.deleteMany({ eventId });
+      await Seat.insertMany(buildSeatDocs(existing));
+    } else {
+      // Layout is unchanged — just relabel/reprice the seats each tier already owns.
+      await Promise.all(
+        input.tiers.map((tier) =>
+          Seat.updateMany(
+            { eventId, seatNumber: { $regex: `^[${tier.rows.join('')}]\\d+$` } },
+            { $set: { tier: tier.name, price: tier.price } }
+          )
+        )
+      );
+    }
+
+    broadcastCatalogChanged(eventId);
+    broadcastAdminUpdate();
+
+    return res.json({
+      ...existing.toObject(),
+      priceRange: computePriceRange(existing.tiers),
+    });
+  } catch (err) {
+    const status = err.status || 500;
+    if (status === 500) console.error('Failed to update event:', err.message);
+    return res.status(status).json({ message: err.message || 'Unable to update event.' });
+  }
+});
+
+app.delete('/api/admin/events/:eventId', requireAuth, requireAdmin, async (req, res) => {
+  const { eventId } = req.params;
+
+  if (!mongoose.isValidObjectId(eventId)) {
+    return res.status(400).json({ message: 'Invalid event id.' });
+  }
+
+  try {
+    const event = await Event.findById(eventId);
+    if (!event) {
+      return res.status(404).json({ message: 'Event not found.' });
+    }
+
+    const bookedCount = await Seat.countDocuments({ eventId, status: 'booked' });
+    if (bookedCount > 0) {
+      return res.status(409).json({
+        message: `Can't delete — ${bookedCount} seat(s) are already booked for this event. Cancel those bookings first.`,
+      });
+    }
+
+    await Seat.deleteMany({ eventId });
+    await Booking.deleteMany({ eventId, status: 'cancelled' });
+    await event.deleteOne();
+
+    broadcastCatalogChanged(eventId);
+    broadcastAdminUpdate();
+
+    return res.json({ message: 'Event deleted.' });
+  } catch (err) {
+    console.error('Failed to delete event:', err.message);
+    return res.status(500).json({ message: 'Unable to delete event.' });
   }
 });
 

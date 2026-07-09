@@ -67,3 +67,26 @@ export function fetchAdminStats(token) {
 export function fetchAdminBookings(token) {
   return request('/api/admin/bookings', { token });
 }
+
+export function createEvent(payload, token) {
+  return request('/api/admin/events', {
+    method: 'POST',
+    body: payload,
+    token,
+  });
+}
+
+export function updateEvent(eventId, payload, token) {
+  return request(`/api/admin/events/${eventId}`, {
+    method: 'PUT',
+    body: payload,
+    token,
+  });
+}
+
+export function deleteEvent(eventId, token) {
+  return request(`/api/admin/events/${eventId}`, {
+    method: 'DELETE',
+    token,
+  });
+}
